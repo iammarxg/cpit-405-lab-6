@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lab 6</title>
+  <style>
+    body {
+      font-family: "Times New Roman", serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      text-align: center;
+      color: #2c2c2c;
+    }
+    h1 { font-size: 3rem; margin-bottom: 1.5rem; }
+    h2 { margin-bottom: 1.5rem; }
+    h3 { color: #000; }
+
+    .votes { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; }
+    .vote-btn {
+      font-size: 3rem;
+      padding: 8px 40px;
+      background: #e6e6eb;
+      border: 1px solid #8a8a99;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    .vote-btn:hover:not(:disabled) { transform: scale(1.08); }
+    .vote-btn:active:not(:disabled) { transform: scale(0.95); }
+    .vote-btn.selected { background: #cfd8ff; border-color: #3b5bdb; }
+    .vote-btn:disabled { cursor: not-allowed; opacity: 0.7; }
+
+    textarea {
+      width: 100%;
+      height: 200px;
+      box-sizing: border-box;
+      padding: 14px;
+      font-size: 1.3rem;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      border: 1px solid #c4c4c4;
+      border-radius: 8px;
+      resize: vertical;
+    }
+    textarea:disabled { background: #f3f3f3; }
+
+    .actions { margin-top: 24px; display: flex; justify-content: center; gap: 24px; }
+    .action-btn {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 1.2rem;
+      padding: 14px 34px;
+      background: #484848;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .action-btn:hover:not(:disabled) { background: #2c2c2c; }
+    .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #message { min-height: 1.5em; margin-top: 16px; font-family: Helvetica, Arial, sans-serif; color: #2b8a3e; }
+    #comments-list { list-style: none; padding: 0; margin-top: 16px; text-align: left; }
+    #comments-list li {
+      background: #f5f5f8;
+      border-left: 4px solid #484848;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <h1>Lab 6</h1>
+  <h2>Like or dislike</h2>
+
+  <div class="votes">
+    <button id="like-btn" class="vote-btn">👍<span id="like-count">100</span></button>
+    <button id="dislike-btn" class="vote-btn">👎<span id="dislike-count">20</span></button>
+  </div>
+
+  <h3>Comments</h3>
+  <textarea id="comment-input" placeholder="Write a comment..."></textarea>
+
+  <div class="actions">
+    <button id="submit-btn" class="action-btn">Submit</button>
+    <button id="clear-btn" class="action-btn">Clear</button>
+  </div>
+
+  <div id="message"></div>
+  <ul id="comments-list"></ul>
+
+  <script>
+    // ---------- State ----------
+    const BASE_LIKES = 100;
+    const BASE_DISLIKES = 20;
+    let likes = BASE_LIKES;
+    let dislikes = BASE_DISLIKES;
+    let comments = [];
+
+    // ---------- DOM ----------
+    const likeBtn = document.getElementById("like-btn");
+    const dislikeBtn = document.getElementById("dislike-btn");
+    const likeCount = document.getElementById("like-count");
+    const dislikeCount = document.getElementById("dislike-count");
+    const commentInput = document.getElementById("comment-input");
+    const submitBtn = document.getElementById("submit-btn");
+    const clearBtn = document.getElementById("clear-btn");
+    const commentsList = document.getElementById("comments-list");
+    const message = document.getElementById("message");
+
+    // ---------- Cookie helpers ----------
+    function setCookie(name, value, days = 365) {
+      const expires = new Date(Date.now() + days * 864e5).toUTCString();
+      document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+    }
+
+    function getCookie(name) {
+      const match = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith(name + "="));
+      return match ? decodeURIComponent(match.split("=").slice(1).join("=")) : null;
+    }
+
+    function deleteCookie(name) {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+    }
+
+    // ---------- UI ----------
+    function showMessage(text) {
+      message.textContent = text;
+      setTimeout(() => { if (message.textContent === text) message.textContent = ""; }, 3000);
+    }
+
+    function render() {
+      const vote = getCookie("vote");
+
+      likeCount.textContent = likes;
+      dislikeCount.textContent = dislikes;
+
+      likeBtn.classList.toggle("selected", vote === "like");
+      dislikeBtn.classList.toggle("selected", vote === "dislike");
+      likeBtn.disabled = dislikeBtn.disabled = vote !== null;
+
+      commentsList.innerHTML = "";
+      comments.forEach((text) => {
+        const li = document.createElement("li");
+        li.textContent = text;
+        commentsList.appendChild(li);
+      });
+
+      const hasCommented = comments.length > 0;
+      commentInput.disabled = hasCommented;
+      submitBtn.disabled = hasCommented;
+    }
+
+    // ---------- Load saved state ----------
+    function loadState() {
+      const vote = getCookie("vote");
+      if (vote === "like") likes = BASE_LIKES + 1;
+      if (vote === "dislike") dislikes = BASE_DISLIKES + 1;
+
+      try {
+        const saved = JSON.parse(getCookie("comments"));
+        comments = Array.isArray(saved) ? saved : [];
+      } catch {
+        comments = [];
+      }
+      render();
+    }
+
+    // ---------- Events ----------
+    function handleVote(type) {
+      if (getCookie("vote")) return; // already voted
+      if (type === "like") likes++;
+      else dislikes++;
+      setCookie("vote", type);
+      render();
+    }
+
+    likeBtn.addEventListener("click", () => handleVote("like"));
+    dislikeBtn.addEventListener("click", () => handleVote("dislike"));
+
+    submitBtn.addEventListener("click", () => {
+      const text = commentInput.value.trim();
+      if (!text) {
+        showMessage("Please write a comment first.");
+        return;
+      }
+      if (comments.length > 0) return; // already commented
+      comments.push(text);
+      setCookie("comments", JSON.stringify(comments));
+      commentInput.value = "";
+      render();
+    });
+
+    clearBtn.addEventListener("click", () => {
+      // Undo the user's vote and remove their comment
+      const vote = getCookie("vote");
+      if (vote === "like") likes = BASE_LIKES;
+      if (vote === "dislike") dislikes = BASE_DISLIKES;
+
+      deleteCookie("vote");
+      deleteCookie("comments");
+      comments = [];
+      commentInput.value = "";
+      render();
+      showMessage("Your vote and comment have been reset. You can vote again.");
+    });
+
+    loadState();
+  </script>
+</body>
+</html>
